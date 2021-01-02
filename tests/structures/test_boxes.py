@@ -7,6 +7,7 @@ import torch
 
 from detectron2.structures import Boxes, BoxMode, pairwise_ioa, pairwise_iou
 from detectron2.utils.env import TORCH_VERSION
+from detectron2.utils.testing import reload_script_model
 
 
 class TestBoxMode(unittest.TestCase):
@@ -200,6 +201,7 @@ class TestBoxes(unittest.TestCase):
             return boxes.area(), test
 
         f = torch.jit.script(func)
+        f = reload_script_model(f)
         f(torch.rand((3, 4)))
 
         data = torch.rand((3, 4))

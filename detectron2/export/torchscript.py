@@ -6,10 +6,7 @@ import torch
 from detectron2.utils.env import TORCH_VERSION
 from detectron2.utils.file_io import PathManager
 
-from .torchscript_patch import freeze_training_mode, patch_instances, patch_nonscriptable_classes
-
-# These patches are not supposed to have side-effects.
-patch_nonscriptable_classes()
+from .torchscript_patch import freeze_training_mode, patch_instances
 
 
 def export_torchscript_with_instances(model, fields):
@@ -55,6 +52,17 @@ def export_torchscript_with_instances(model, fields):
         not model.training
     ), "Currently we only support exporting models in evaluation mode to torchscript"
 
+    from copy import deepcopy
+
+    # TODO: __prepare_scriptable__ was reverted from pytorch: D25061862
+    # We hack it here until it's added back in https://github.com/pytorch/pytorch/pull/49242
+    model = deepcopy(model)
+    for m in model.modules():
+        for name, subm in m.named_children():
+            if hasattr(subm, "__tmp_prepare_scriptable__"):
+                newm = subm.__tmp_prepare_scriptable__()
+                setattr(m, name, newm)
+
     with freeze_training_mode(model), patch_instances(fields):
         scripted_model = torch.jit.script(model)
         return scripted_model
@@ -69,6 +77,7 @@ def dump_torchscript_IR(model, dir):
         model (TracedModule or ScriptModule): traced or scripted module
         dir (str): output directory to dump files.
     """
+    # TODO: support ScriptFunction as well
     PathManager.mkdirs(dir)
 
     def _get_script_mod(mod):
